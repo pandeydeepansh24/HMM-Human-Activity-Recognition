@@ -41,28 +41,50 @@ The saved outputs from the original notebook show 7,352 training rows, 2,947 tes
 
 ## Local Setup
 
-The commands below use Anaconda on Windows:
+Use Python 3.10 to 3.12 (macOS or Linux shown; on Windows use `.venv\Scripts\activate`):
 
-```powershell
-conda create -n human-activity-hmm python=3.10 -y
-conda activate human-activity-hmm
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
+```
+
+Download the data. This fetches the official UCI archive (no login needed, about 60 MB) and writes `Data/train.csv` and `Data/test.csv` in the Kaggle column layout:
+
+```bash
+python scripts/download_data.py
 ```
 
 Run the reusable pipeline:
 
-```powershell
-python scripts/run_activity_recognition.py `
-  --train Data/train.csv `
-  --test Data/test.csv `
+```bash
+python scripts/run_activity_recognition.py \
+  --train Data/train.csv \
+  --test Data/test.csv \
   --output artifacts/metrics.json
 ```
 
 Run the smoke tests without the full dataset:
 
-```powershell
+```bash
 python -m pytest -q
 ```
+
+## Results (reusable pipeline, default settings)
+
+80 PCA components, 3 hidden states per HMM, 16-window test chunks. Run on the official 7,352 / 2,947 train/test split:
+
+| Activity | HMM F1 | Logistic Regression F1 |
+|---|---|---|
+| LAYING | 0.831 | 0.990 |
+| SITTING | 0.703 | 0.878 |
+| STANDING | 0.789 | 0.902 |
+| WALKING | 0.857 | 0.945 |
+| WALKING_DOWNSTAIRS | 0.683 | 0.930 |
+| WALKING_UPSTAIRS | 0.761 | 0.909 |
+| **Accuracy** | **0.773** | **0.926** |
+
+The per-window Logistic Regression baseline beats the class-conditional HMMs. The features are already engineered summaries of each 2.56 s window, so most of the information is inside a single window, and fixed 16-window test chunks can straddle two activities.
 
 The original notebook, `Human Activity Recognition from Smart Phone Data.ipynb`, is retained as a historical reference. The script under `scripts/` and the package under `src/` are the reproducible path for new runs.
 
@@ -77,7 +99,3 @@ The original saved notebook reported approximately 0.873 HMM micro F1 at one hid
 - The reusable implementation assumes contiguous rows for a subject represent temporal order.
 - The dataset is a benchmark and should not be treated as validated performance for a new device, subject population, or safety-critical product.
 - The current pipeline predicts activity classes; it is not a deployed real-time mobile application.
-
-## Suggested Repository Name
-
-`human-activity-hmm-benchmark` is more concise and explains both the subject and the primary method. The current GitHub repository name is unchanged until explicitly approved.

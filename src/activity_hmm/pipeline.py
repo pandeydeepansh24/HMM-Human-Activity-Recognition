@@ -182,7 +182,6 @@ class ActivityRecognitionPipeline:
 
         self.baseline = LogisticRegression(
             max_iter=1000,
-            multi_class="auto",
             random_state=self.config.random_state,
         )
         self.baseline.fit(transformed, target_values.astype(str))
