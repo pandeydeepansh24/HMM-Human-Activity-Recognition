@@ -1,0 +1,521 @@
+<title>Phone Activity HMM</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a lab-notebook column (input -> method -> output), instrument-style plots on plain surfaces, one volunteer selector driving every plot */
+:root {
+  --bg: #f3f6f7; --surface: #ffffff; --fg: #15202a; --muted: #5a6873; --line: #d6dee3; --soft: #e8eef1;
+  --accent: #0d6a88; --warm: #b95a2a;
+  --a0: #3c6cb3; --a1: #8660b5; --a2: #2a9484; --a3: #dc8424; --a4: #c4443b; --a5: #a88d12;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1418; --surface: #151d23; --fg: #e2e9ed; --muted: #92a0aa; --line: #2a353d; --soft: #1c262d;
+  --accent: #52b4d2; --warm: #e58b5c;
+  --a0: #6e9ce0; --a1: #b190e2; --a2: #4ec3b0; --a3: #f0a24c; --a4: #ec736b; --a5: #d6bd45; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e1418; --surface: #151d23; --fg: #e2e9ed; --muted: #92a0aa; --line: #2a353d; --soft: #1c262d;
+  --accent: #52b4d2; --warm: #e58b5c;
+  --a0: #6e9ce0; --a1: #b190e2; --a2: #4ec3b0; --a3: #f0a24c; --a4: #ec736b; --a5: #d6bd45; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.01em; }
+h2 { font-size: 26px; }
+h3 { font-size: 17px; font-weight: 500; }
+p { margin: 0; max-width: 68ch; }
+.muted { color: var(--muted); }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+
+header { display: grid; gap: 14px; }
+.facts { display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 6px; }
+.fact { display: grid; }
+.fact b { font-family: var(--mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 13px; color: var(--muted); }
+
+.toolbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+  border-bottom: 1px solid var(--line); padding-block: 10px; display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 11px; height: 11px; border-radius: 2px; display: inline-block; flex: none; }
+label.sel { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+select, button { font: inherit; font-size: 14px; color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+select:focus-visible, button:focus-visible, canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:hover, select:hover { border-color: var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+
+section { display: grid; gap: 18px; }
+.sechead { display: grid; gap: 6px; border-top: 2px solid var(--fg); padding-top: 14px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+canvas { display: block; width: 100%; }
+.caption { font-size: 13px; color: var(--muted); }
+
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; counter-reset: step;
+  border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.step { padding: 14px; display: grid; gap: 4px; align-content: start; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); position: relative; }
+.step::before { counter-increment: step; content: counter(step); font-family: var(--mono); font-size: 12px; color: var(--accent); }
+.step b { font-family: var(--display); font-weight: 600; font-size: 16px; }
+.step span { font-size: 13px; color: var(--muted); }
+.step .num { color: var(--fg); font-size: 13px; }
+
+.timeline-rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+.timeline-rows .lab { font-size: 13px; color: var(--muted); text-align: right; white-space: nowrap; }
+.nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.bars { display: grid; gap: 6px; }
+.bar { display: grid; grid-template-columns: 92px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+.bar .track { height: 14px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.bar .fill { height: 100%; border-radius: 3px; }
+.bar .val { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 7ch; text-align: right; }
+.bar.win .name { font-weight: 600; }
+.bar.win .val { color: var(--fg); }
+.states { display: flex; flex-wrap: wrap; gap: 3px; }
+.states span { width: 26px; height: 26px; display: grid; place-items: center; font-family: var(--mono); font-size: 12px;
+  border-radius: 4px; color: var(--surface); }
+.verdict { font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--mono); padding: 2px 8px;
+  border-radius: 999px; border: 1px solid var(--line); }
+.pill.ok { border-color: var(--a2); color: var(--a2); }
+.pill.bad { border-color: var(--a4); color: var(--a4); }
+
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 8px; text-align: right; }
+th { font-weight: 500; color: var(--muted); }
+th.rowh { text-align: right; white-space: nowrap; }
+.cm td { font-family: var(--mono); min-width: 44px; border: 1px solid var(--bg); }
+.cm thead th { writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; height: 92px; vertical-align: bottom; }
+.tm td { font-family: var(--mono); min-width: 58px; border: 1px solid var(--bg); text-align: center; }
+.metrics td { font-family: var(--mono); }
+.metrics td.best { font-weight: 600; }
+.metrics tr.total td, .metrics tr.total th { border-top: 1px solid var(--line); }
+#barcodeInfo { font-family: var(--mono); font-size: 12px; min-height: 1.6em; color: var(--muted); overflow-wrap: anywhere; }
+.featrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 18px; }
+.featrow div { display: grid; font-size: 13px; }
+.featrow b { font-family: var(--mono); font-weight: 500; font-size: 18px; }
+.featrow span { color: var(--muted); }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Human activity recognition · Hidden Markov Models</div>
+    <h1>Phone Activity HMM</h1>
+    <p>A phone worn on the waist records how its owner moves. From those sensor readings, six Hidden Markov Models, one per activity, decide whether the person is laying, sitting, standing, walking, or walking down or up stairs. A Logistic Regression is trained on the same inputs as a comparison. Every number and plot below comes from one run of the pipeline in this repository on the UCI dataset.</p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <div class="toolbar">
+    <label class="sel" for="subjectSel">Test volunteer <select id="subjectSel"></select></label>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <!-- INPUT -->
+  <section id="input">
+    <div class="sechead">
+      <div class="eyebrow">Input</div>
+      <h2>What the model receives</h2>
+      <p class="muted">The phone's accelerometer and gyroscope are sampled at 50 Hz. The signal is cut into 2.56 s windows (128 samples, 50% overlap), and each window is summarised as 561 numbers scaled to −1…1: means, deviations, energies, frequency bands and angles. One row of the CSV is one window. The model never sees raw waveforms.</p>
+    </div>
+    <div class="panel">
+      <h3>Four of the 561 features over time, <span id="tracesWho"></span></h3>
+      <canvas id="traces" style="height: 300px" role="img" aria-label="Feature values over time, background colored by true activity"></canvas>
+      <p class="caption">Each point is one 2.56 s window. The background shows the true activity. Movement intensity separates the walking activities from the still ones, and gravity along X (posture) singles out laying.</p>
+    </div>
+    <div class="panel">
+      <div style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between">
+        <h3>One full input row: all 561 values</h3>
+        <div class="seg" id="exampleSeg" role="group" aria-label="Choose example activity"></div>
+      </div>
+      <canvas id="barcode" style="height: 96px" tabindex="0" role="img" aria-label="561 feature values of one example window"></canvas>
+      <div id="barcodeInfo">Hover or tap the strip to read a feature.</div>
+      <div class="featrow" id="exampleFeats"></div>
+    </div>
+  </section>
+
+  <!-- METHOD -->
+  <section id="method">
+    <div class="sechead">
+      <div class="eyebrow">Method</div>
+      <h2>From 561 numbers to one activity</h2>
+      <p class="muted">The scaler, the PCA and every model are fitted on the training volunteers only. The test volunteers are never seen during training.</p>
+    </div>
+    <div class="flow" id="flow"></div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>The compressed feature space (first 2 of <span id="pcaN"></span> PCA components)</h3>
+        <canvas id="scatter" style="height: 320px" role="img" aria-label="Test windows in the first two PCA components, colored by true activity"></canvas>
+        <p class="caption" id="scatterCap"></p>
+      </div>
+      <div class="panel">
+        <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between">
+          <h3>Inside one activity's HMM</h3>
+          <select id="hmmSel" aria-label="Activity model to inspect"></select>
+        </div>
+        <p class="caption">Each HMM has <span id="nStates"></span> hidden states, sub-phases of the activity that the model discovers by itself. It learns how likely each state is to follow another (below), and what sensor values each state produces (the S markers on the plot).</p>
+        <div class="scroll"><table class="tm" id="transmat"></table></div>
+        <p class="caption" id="hmmCap"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- OUTPUT -->
+  <section id="output">
+    <div class="sechead">
+      <div class="eyebrow">Output</div>
+      <h2>Predictions on unseen volunteers</h2>
+      <p class="muted">The test windows are cut into chunks of <span class="num" id="winN"></span> consecutive windows (about <span class="num" id="winSec"></span> s). All six HMMs score each chunk, and the activity whose model explains it best wins. Logistic Regression labels each window on its own. Click any chunk on the timeline to see the decision.</p>
+    </div>
+    <div class="panel">
+      <div style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline;justify-content:space-between">
+        <h3>Timeline, <span id="tlWho"></span></h3>
+        <div class="verdict" id="subjAcc"></div>
+      </div>
+      <canvas id="timeline" style="height: 112px" tabindex="0" role="img" aria-label="True activity, HMM and Logistic Regression predictions over time. Use the arrow keys to move between chunks."></canvas>
+      <div class="nav">
+        <button id="prevChunk" type="button">← Previous chunk</button>
+        <button id="nextChunk" type="button">Next chunk →</button>
+        <button id="nextWrong" type="button">Next HMM mistake</button>
+        <span class="caption" id="chunkWhere"></span>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>HMM decision for this chunk</h3>
+        <div class="verdict" id="chunkVerdict"></div>
+        <p class="caption">Average log-likelihood per window under each activity's model. Higher means the model explains the chunk better, and the highest one is the prediction. The numbers show how far each model falls behind the winner (log scale, so −5 means about 150× less likely per window).</p>
+        <div class="bars" id="llBars"></div>
+        <p class="caption">Hidden state the winning model assigns to each window (Viterbi path):</p>
+        <div class="states" id="statePath"></div>
+      </div>
+      <div class="panel">
+        <h3>Logistic Regression for the same windows</h3>
+        <div class="verdict" id="lrVerdict"></div>
+        <p class="caption">Mean predicted probability of each activity across the chunk's windows.</p>
+        <div class="bars" id="lrBars"></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>Scores on all 2,947 test windows</h3>
+        <div class="scroll"><table class="metrics" id="metricsTbl"></table></div>
+        <p class="caption">F1 per activity: the balance of precision and recall, where 1.0 is perfect. Logistic Regression wins here. Each row is already a 2.56 s summary, so most of the information sits inside one window, and a 16-window chunk that crosses an activity change can only get one label.</p>
+      </div>
+      <div class="panel">
+        <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between">
+          <h3>Where the mistakes go</h3>
+          <div class="seg" id="cmSeg" role="group" aria-label="Choose model"></div>
+        </div>
+        <div class="scroll"><table class="cm" id="cmTbl"></table></div>
+        <p class="caption">Rows are the true activity and columns the prediction (window counts). The diagonal is correct. Most confusion is sitting vs standing, and between the three walking activities.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Data: UCI Human Activity Recognition Using Smartphones (30 volunteers, Samsung Galaxy S II on the waist). The official split has 21 volunteers for training and 9 for testing.</div>
+    <div>This page shows the outputs of one real run. It was generated by <span class="mono">scripts/build_demo.py</span>, and the browser does not retrain anything.</div>
+  </footer>
+</div>
+
+<script>
+const D = /*__DEMO_DATA__*/null;
+const L = D.labels, R = D.rows, NL = L.length;
+const NICE = { LAYING: "Laying", SITTING: "Sitting", STANDING: "Standing", WALKING: "Walking", WALKING_DOWNSTAIRS: "Downstairs", WALKING_UPSTAIRS: "Upstairs" };
+const nice = i => NICE[L[i]] || L[i];
+const fmt = (x, d = 0) => Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const $ = id => document.getElementById(id);
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+let C = {};
+function readColors() {
+  C = { fg: css("--fg"), muted: css("--muted"), line: css("--line"), soft: css("--soft"), surface: css("--surface"),
+        accent: css("--accent"), warm: css("--warm"), act: L.map((_, i) => css("--a" + i)) };
+}
+function canvasCtx(cv) {
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+function alpha(hex, a) {
+  const m = hex.replace("#", ""); const v = parseInt(m.length === 3 ? m.replace(/./g, c => c + c) : m, 16);
+  return `rgba(${v >> 16 & 255},${v >> 8 & 255},${v & 255},${a})`;
+}
+
+// ---------- state ----------
+const subjects = [...new Set(R.subject)];
+const ranges = {};
+R.subject.forEach((s, i) => { if (!ranges[s]) ranges[s] = [i, i + 1]; else ranges[s][1] = i + 1; });
+let subj = subjects[0], chunkIdx = 0, example = L.indexOf("WALKING"), hmmAct = L.indexOf("WALKING"), cmModel = "hmm";
+const subjChunks = () => D.chunks.map((c, i) => ({ ...c, i })).filter(c => c.s >= ranges[subj][0] && c.s < ranges[subj][1]);
+
+// ---------- static parts ----------
+function buildStatic() {
+  const s = D.sizes;
+  $("facts").innerHTML = [
+    [fmt(s.train_rows), "training windows"], [fmt(s.test_rows), "test windows"], [s.features, "features per window"],
+    [`${s.train_subjects} + ${s.test_subjects}`, "volunteers (train + test)"], [NL, "activities"]
+  ].map(([b, t]) => `<div class="fact"><b>${b}</b><span>${t}</span></div>`).join("");
+  $("legend").innerHTML = L.map((_, i) => `<span><i class="sw" style="background:var(--a${i})"></i>${nice(i)}</span>`).join("");
+  $("subjectSel").innerHTML = subjects.map(s => `<option value="${s}">Volunteer ${s} (${ranges[s][1] - ranges[s][0]} windows)</option>`).join("");
+  $("exampleSeg").innerHTML = L.map((_, i) => `<button type="button" data-i="${i}">${nice(i)}</button>`).join("");
+  $("hmmSel").innerHTML = L.map((_, i) => `<option value="${i}">${nice(i)} model</option>`).join("");
+  $("cmSeg").innerHTML = `<button type="button" data-m="hmm">HMM</button><button type="button" data-m="lr">Logistic Reg.</button>`;
+  const cfg = D.config, cv = D.pca_cumvar[cfg.pca - 1];
+  $("pcaN").textContent = cfg.pca; $("nStates").textContent = cfg.states;
+  $("winN").textContent = cfg.window; $("winSec").textContent = fmt(cfg.window * 1.28, 0);
+  const steps = [
+    ["Drop the answer", "Remove the Activity label and the volunteer ID, leaving 561 sensor features."],
+    ["Standardise", "Rescale every feature to mean 0, spread 1, using training statistics."],
+    ["Compress with PCA", `561 → <span class="num">${cfg.pca}</span> components, keeping <span class="num">${fmt(cv * 100, 1)}%</span> of the variance.`],
+    ["Train one HMM per activity", `${NL} Gaussian HMMs, ${cfg.states} hidden states each, fitted on unbroken runs of that activity.`],
+    ["Score a chunk", `Every model computes how likely ${cfg.window} consecutive test windows are under it.`],
+    ["Pick the best", "The activity whose model gives the highest likelihood is the prediction."]
+  ];
+  $("flow").innerHTML = steps.map(([b, t]) => `<div class="step"><b>${b}</b><span>${t}</span></div>`).join("");
+}
+
+// ---------- input ----------
+function drawTraces() {
+  const { ctx, w, h } = canvasCtx($("traces"));
+  const [a, b] = ranges[subj], n = b - a, keys = Object.keys(D.showcase), rows = keys.length;
+  const padL = 4, gap = 10, rh = (h - gap * (rows - 1)) / rows;
+  const x = i => padL + (i / (n - 1)) * (w - padL * 2);
+  keys.forEach((k, r) => {
+    const top = r * (rh + gap), vals = D.showcase[k].values.slice(a, b);
+    let lo = Math.min(...vals), hi = Math.max(...vals); if (hi - lo < 1e-6) { hi += 1; lo -= 1; }
+    for (let i = 0; i < n; ) {
+      let j = i; while (j < n && R.truth[a + j] === R.truth[a + i]) j++;
+      ctx.fillStyle = alpha(C.act[R.truth[a + i]], 0.22);
+      const x0 = i === 0 ? 0 : (x(i - 1) + x(i)) / 2, x1 = j === n ? w : (x(j - 1) + x(j)) / 2;
+      ctx.fillRect(x0, top, x1 - x0, rh);
+      i = j;
+    }
+    ctx.strokeStyle = C.fg; ctx.lineWidth = 1.3; ctx.beginPath();
+    vals.forEach((v, i) => { const y = top + 18 + (1 - (v - lo) / (hi - lo)) * (rh - 24); i ? ctx.lineTo(x(i), y) : ctx.moveTo(x(i), y); });
+    ctx.stroke();
+    ctx.font = "500 12px " + css("--body"); ctx.fillStyle = C.fg; ctx.textBaseline = "top";
+    ctx.fillText(D.showcase[k].label, 8, top + 3);
+    ctx.font = "11px " + css("--mono"); ctx.fillStyle = C.muted; ctx.textAlign = "right";
+    ctx.fillText(k, w - 8, top + 3); ctx.textAlign = "left";
+  });
+  $("tracesWho").textContent = `volunteer ${subj}`;
+}
+
+const GROUPS = [[0, 265, "time-domain"], [265, 554, "frequency-domain"], [554, 561, "angles"]];
+function drawBarcode() {
+  const { ctx, w, h } = canvasCtx($("barcode"));
+  const vals = D.examples[L[example]].values, n = vals.length, bh = h - 22, mid = bh / 2, bw = w / n;
+  ctx.fillStyle = C.soft; ctx.fillRect(0, 0, w, bh);
+  vals.forEach((v, i) => {
+    ctx.fillStyle = v >= 0 ? C.accent : C.warm;
+    const len = Math.abs(v) * mid;
+    ctx.fillRect(i * bw, v >= 0 ? mid - len : mid, Math.max(bw, 1), len);
+  });
+  ctx.strokeStyle = C.muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, mid + 0.5); ctx.lineTo(w, mid + 0.5); ctx.stroke();
+  ctx.font = "11px " + css("--mono"); ctx.textBaseline = "top";
+  GROUPS.forEach(([s, e, name]) => {
+    const x0 = s * bw, x1 = e * bw;
+    ctx.strokeStyle = C.muted; ctx.beginPath(); ctx.moveTo(x0 + 1, bh + 4); ctx.lineTo(x1 - 1, bh + 4); ctx.stroke();
+    if (x1 - x0 > 60) { ctx.fillStyle = C.muted; ctx.fillText(name, x0 + 2, bh + 8); }
+  });
+  const ex = D.examples[L[example]];
+  const pick = Object.keys(D.showcase).map(k => [D.showcase[k].label, vals[D.feature_names.indexOf(k)], k]);
+  $("exampleFeats").innerHTML = `<div><span>Example window</span><b>CSV row ${ex.row + 2}</b><span>volunteer ${ex.subject}, ${nice(example)}</span></div>` +
+    pick.map(([lab, v, k]) => `<div><span>${lab}</span><b>${v >= 0 ? "+" : "−"}${fmt(Math.abs(v), 3)}</b><span class="mono" style="font-size:11px">${k}</span></div>`).join("");
+  document.querySelectorAll("#exampleSeg button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.i === example));
+}
+function barcodeHover(ev) {
+  const cv = $("barcode"), r = cv.getBoundingClientRect();
+  const i = Math.max(0, Math.min(560, Math.floor((ev.clientX - r.left) / r.width * 561)));
+  const v = D.examples[L[example]].values[i];
+  $("barcodeInfo").textContent = `#${i + 1}  ${D.feature_names[i]} = ${v >= 0 ? "+" : "−"}${fmt(Math.abs(v), 3)}`;
+}
+
+// ---------- method ----------
+function drawScatter() {
+  const { ctx, w, h } = canvasCtx($("scatter"));
+  const pad = 26, xs = R.pc1, ys = R.pc2;
+  const means = D.hmm_params[L[hmmAct]].means_pc12;
+  const allX = xs.concat(means.map(m => m[0])), allY = ys.concat(means.map(m => m[1]));
+  const x0 = Math.min(...allX), x1 = Math.max(...allX), y0 = Math.min(...allY), y1 = Math.max(...allY);
+  const X = v => pad + (v - x0) / (x1 - x0) * (w - pad * 2), Y = v => h - pad - (v - y0) / (y1 - y0) * (h - pad * 2);
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(X(0), pad / 2); ctx.lineTo(X(0), h - pad / 2); ctx.moveTo(pad / 2, Y(0)); ctx.lineTo(w - pad / 2, Y(0)); ctx.stroke();
+  ctx.font = "11px " + css("--mono"); ctx.fillStyle = C.muted; ctx.textBaseline = "bottom";
+  ctx.fillText("PC1 →", w - pad - 34, h - 4); ctx.save(); ctx.translate(12, pad + 30); ctx.rotate(-Math.PI / 2); ctx.fillText("PC2 →", 0, 0); ctx.restore();
+  const order = [...xs.keys()].sort((a, b) => (R.truth[a] === hmmAct) - (R.truth[b] === hmmAct));
+  for (const i of order) {
+    const on = R.truth[i] === hmmAct;
+    ctx.fillStyle = alpha(C.act[R.truth[i]], on ? 0.85 : 0.18);
+    ctx.beginPath(); ctx.arc(X(xs[i]), Y(ys[i]), on ? 2.4 : 1.8, 0, 7); ctx.fill();
+  }
+  means.forEach((m, k) => {
+    const cx = X(m[0]), cy = Y(m[1]);
+    ctx.fillStyle = C.surface; ctx.strokeStyle = C.fg; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 11, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.fg; ctx.font = "600 11px " + css("--mono"); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("S" + (k + 1), cx, cy + 0.5); ctx.textAlign = "left";
+  });
+  $("scatterCap").textContent = `Each dot is one test window. ${nice(hmmAct)} windows are highlighted, and S1–S${means.length} mark the centres of the ${nice(hmmAct).toLowerCase()} model's hidden states. The still activities sit far from the walking ones, but sitting and standing overlap, which is where most mistakes happen.`;
+}
+function renderHMM() {
+  const p = D.hmm_params[L[hmmAct]], k = p.transmat.length, col = C.act[hmmAct];
+  let html = `<thead><tr><th></th>${p.transmat.map((_, j) => `<th style="text-align:center">to S${j + 1}</th>`).join("")}<th style="text-align:center">start</th></tr></thead><tbody>`;
+  p.transmat.forEach((row, i) => {
+    html += `<tr><th class="rowh">from S${i + 1}</th>` + row.map(v =>
+      `<td style="background:${alpha(col, 0.08 + v * 0.8)};color:${v > 0.55 ? C.surface : C.fg}">${fmt(v, 2)}</td>`).join("") +
+      `<td style="background:${alpha(col, 0.08 + p.startprob[i] * 0.8)};color:${p.startprob[i] > 0.55 ? C.surface : C.fg}">${fmt(p.startprob[i], 2)}</td></tr>`;
+  });
+  $("transmat").innerHTML = html + "</tbody>";
+  const stay = p.transmat.map((r, i) => r[i]);
+  const avgStay = stay.reduce((a, b) => a + b, 0) / k;
+  $("hmmCap").textContent = `The diagonal is the chance of staying in the same state for the next window (average ${fmt(avgStay, 2)}). High values mean the state lasts several windows in a row. That persistence over time is what an HMM adds over a per-window classifier.`;
+  $("hmmSel").value = hmmAct;
+  drawScatter();
+}
+
+// ---------- output ----------
+function drawTimeline() {
+  const { ctx, w, h } = canvasCtx($("timeline"));
+  const [a, b] = ranges[subj], n = b - a, bw = w / n, rowH = 30, gap = 8;
+  const series = [R.truth, R.hmm, R.lr];
+  series.forEach((arr, r) => {
+    const top = r * (rowH + gap);
+    for (let i = 0; i < n; i++) { ctx.fillStyle = C.act[arr[a + i]]; ctx.fillRect(i * bw, top, bw + 0.6, rowH); }
+    if (r > 0) for (let i = 0; i < n; i++) if (arr[a + i] !== R.truth[a + i]) {
+      ctx.fillStyle = C.fg; ctx.fillRect(i * bw, top + rowH - 4, bw + 0.6, 4);
+    }
+  });
+  const ch = subjChunks();
+  ctx.strokeStyle = C.surface; ctx.lineWidth = 1;
+  ch.forEach(c => { const x = (c.s - a) * bw; ctx.beginPath(); ctx.moveTo(x + 0.5, rowH + gap); ctx.lineTo(x + 0.5, 2 * rowH + gap); ctx.stroke(); });
+  const sel = ch[chunkIdx];
+  if (sel) {
+    const x = (sel.s - a) * bw, cw = (sel.e - sel.s) * bw;
+    ctx.strokeStyle = C.fg; ctx.lineWidth = 2; ctx.strokeRect(x + 1, 1, cw - 2, 3 * rowH + 2 * gap - 2);
+  }
+  // row labels drawn on a light plate over the strips
+  ctx.font = "500 11px " + css("--body"); ctx.textBaseline = "middle";
+  ["True", "HMM", "Log. Reg."].forEach((t, r) => {
+    const y = r * (rowH + gap) + rowH / 2, tw = ctx.measureText(t).width;
+    ctx.fillStyle = alpha(C.surface, 0.85); ctx.fillRect(4, y - 8, tw + 8, 16);
+    ctx.fillStyle = C.fg; ctx.fillText(t, 8, y + 0.5);
+  });
+}
+function chunkFromX(clientX) {
+  const cv = $("timeline"), r = cv.getBoundingClientRect(), [a, b] = ranges[subj];
+  const row = a + Math.floor((clientX - r.left) / r.width * (b - a));
+  return subjChunks().findIndex(c => row >= c.s && row < c.e);
+}
+function counts(arr, s, e) { const c = Array(NL).fill(0); for (let i = s; i < e; i++) c[arr[i]]++; return c; }
+function renderChunk() {
+  const ch = subjChunks(), c = ch[chunkIdx]; if (!c) return;
+  const len = c.e - c.s, per = c.ll.map(v => v / len), best = per.indexOf(Math.max(...per));
+  const truthC = counts(R.truth, c.s, c.e);
+  const truthTxt = truthC.map((n, i) => n ? `${nice(i)}${n < len ? ` ×${n}` : ""}` : "").filter(Boolean).join(" + ");
+  const hmmOk = truthC[best] / len;
+  $("chunkWhere").textContent = `Chunk ${chunkIdx + 1} of ${ch.length}: windows ${c.s - ranges[subj][0] + 1}–${c.e - ranges[subj][0]} of volunteer ${subj}`;
+  $("chunkVerdict").innerHTML = `<span>True: <b>${truthTxt}</b></span><span>Predicted: <b style="color:${C.act[best]}">${nice(best)}</b></span>` +
+    `<span class="pill ${hmmOk === 1 ? "ok" : "bad"}">${fmt(hmmOk * 100)}% of windows correct</span>`;
+  const lo = Math.min(...per), hi = per[best];
+  const ord = [...per.keys()].sort((x, y) => per[y] - per[x]);
+  $("llBars").innerHTML = ord.map(i => {
+    const frac = hi - lo < 1e-9 ? 1 : 0.06 + 0.94 * (per[i] - lo) / (hi - lo);
+    const txt = i === best ? "best" : `${fmt(per[i] - hi, 1)}`;
+    return `<div class="bar ${i === best ? "win" : ""}"><span class="name">${nice(i)}</span><div class="track"><div class="fill" style="width:${frac * 100}%;background:${i === best ? C.act[i] : alpha(C.act[i], 0.45)}"></div></div><span class="val">${txt}</span></div>`;
+  }).join("");
+  $("statePath").innerHTML = R.state.slice(c.s, c.e).map(s =>
+    `<span style="background:${alpha(C.act[best], 0.45 + 0.55 * s / Math.max(1, D.config.states - 1))}">S${s + 1}</span>`).join("");
+  const mean = Array(NL).fill(0);
+  for (let i = c.s; i < c.e; i++) R.lr_proba[i].forEach((p, k) => mean[k] += p / len);
+  const lrC = counts(R.lr, c.s, c.e), lrCorrect = [...Array(len).keys()].filter(k => R.lr[c.s + k] === R.truth[c.s + k]).length;
+  const lrTop = lrC.indexOf(Math.max(...lrC));
+  $("lrVerdict").innerHTML = `<span>Most common prediction: <b style="color:${C.act[lrTop]}">${nice(lrTop)}</b></span>` +
+    `<span class="pill ${lrCorrect === len ? "ok" : "bad"}">${fmt(lrCorrect / len * 100)}% of windows correct</span>`;
+  $("lrBars").innerHTML = [...mean.keys()].sort((x, y) => mean[y] - mean[x]).map(i =>
+    `<div class="bar ${i === lrTop ? "win" : ""}"><span class="name">${nice(i)}</span><div class="track"><div class="fill" style="width:${mean[i] * 100}%;background:${C.act[i]}"></div></div><span class="val">${fmt(mean[i] * 100, 1)}%</span></div>`).join("");
+  drawTimeline();
+}
+function renderSubjectAcc() {
+  const [a, b] = ranges[subj]; let h = 0, l = 0;
+  for (let i = a; i < b; i++) { h += R.hmm[i] === R.truth[i]; l += R.lr[i] === R.truth[i]; }
+  $("subjAcc").innerHTML = `<span class="pill">HMM ${fmt(h / (b - a) * 100, 1)}%</span><span class="pill">Logistic Reg. ${fmt(l / (b - a) * 100, 1)}%</span>`;
+  $("tlWho").textContent = `volunteer ${subj}`;
+}
+function renderMetrics() {
+  const m = D.metrics;
+  let html = `<thead><tr><th class="rowh"></th><th>HMM</th><th>Logistic Reg.</th></tr></thead><tbody>`;
+  L.forEach((_, i) => {
+    const a = m.hmm.f1[i], b = m.lr.f1[i];
+    html += `<tr><th class="rowh"><i class="sw" style="background:var(--a${i});margin-right:6px"></i>${nice(i)}</th><td class="${a >= b ? "best" : ""}">${fmt(a, 3)}</td><td class="${b > a ? "best" : ""}">${fmt(b, 3)}</td></tr>`;
+  });
+  html += `<tr class="total"><th class="rowh">Macro F1</th><td class="${m.hmm.f1_macro >= m.lr.f1_macro ? "best" : ""}">${fmt(m.hmm.f1_macro, 3)}</td><td class="${m.lr.f1_macro > m.hmm.f1_macro ? "best" : ""}">${fmt(m.lr.f1_macro, 3)}</td></tr>`;
+  html += `<tr><th class="rowh">Accuracy</th><td class="${m.hmm.accuracy >= m.lr.accuracy ? "best" : ""}">${fmt(m.hmm.accuracy * 100, 1)}%</td><td class="${m.lr.accuracy > m.hmm.accuracy ? "best" : ""}">${fmt(m.lr.accuracy * 100, 1)}%</td></tr>`;
+  $("metricsTbl").innerHTML = html + "</tbody>";
+}
+function renderCM() {
+  const cm = D.metrics[cmModel].confusion;
+  let html = `<thead><tr><th></th>${L.map((_, j) => `<th>${nice(j)}</th>`).join("")}</tr></thead><tbody>`;
+  cm.forEach((row, i) => {
+    const tot = row.reduce((a, b) => a + b, 0);
+    html += `<tr><th class="rowh">${nice(i)}</th>` + row.map((v, j) => {
+      const f = v / tot, col = i === j ? C.act[i] : C.warm;
+      return `<td style="background:${v ? alpha(col, 0.1 + 0.8 * f) : "transparent"};color:${f > 0.55 ? C.surface : C.fg}">${v}</td>`;
+    }).join("") + "</tr>";
+  });
+  $("cmTbl").innerHTML = html + "</tbody>";
+  document.querySelectorAll("#cmSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === cmModel));
+}
+
+// ---------- wiring ----------
+function setChunk(i) { const n = subjChunks().length; chunkIdx = Math.max(0, Math.min(n - 1, i)); renderChunk(); }
+function setSubject(s) { subj = s; chunkIdx = 0; $("subjectSel").value = s; drawTraces(); renderSubjectAcc(); renderChunk(); }
+function drawAll() { readColors(); drawTraces(); drawBarcode(); renderHMM(); renderChunk(); renderCM(); }
+
+buildStatic(); readColors(); renderMetrics(); renderSubjectAcc(); drawAll();
+
+$("subjectSel").addEventListener("change", e => setSubject(+e.target.value));
+$("exampleSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { example = +b.dataset.i; drawBarcode(); } });
+$("cmSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { cmModel = b.dataset.m; renderCM(); } });
+$("hmmSel").addEventListener("change", e => { hmmAct = +e.target.value; renderHMM(); });
+$("barcode").addEventListener("pointermove", barcodeHover);
+$("barcode").addEventListener("pointerdown", barcodeHover);
+$("timeline").addEventListener("click", e => { const i = chunkFromX(e.clientX); if (i >= 0) setChunk(i); });
+$("timeline").addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") { setChunk(chunkIdx + 1); e.preventDefault(); }
+  if (e.key === "ArrowLeft") { setChunk(chunkIdx - 1); e.preventDefault(); }
+});
+$("prevChunk").addEventListener("click", () => setChunk(chunkIdx - 1));
+$("nextChunk").addEventListener("click", () => setChunk(chunkIdx + 1));
+$("nextWrong").addEventListener("click", () => {
+  const order = subjects.slice(subjects.indexOf(subj)).concat(subjects.slice(0, subjects.indexOf(subj) + 1));
+  for (let k = 0; k < order.length; k++) {
+    const s = order[k]; subj = s;
+    const ch = subjChunks(), from = k === 0 ? chunkIdx + 1 : 0;
+    for (let i = from; i < ch.length; i++) {
+      let wrong = false; for (let r = ch[i].s; r < ch[i].e; r++) if (R.hmm[r] !== R.truth[r]) { wrong = true; break; }
+      if (wrong) { if (s !== +$("subjectSel").value) { $("subjectSel").value = s; drawTraces(); renderSubjectAcc(); } chunkIdx = i; renderChunk(); return; }
+    }
+  }
+});
+
+let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(drawAll, 60); }).observe(document.querySelector(".wrap"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll);
+new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+if (document.fonts) document.fonts.ready.then(drawAll);
+</script>
