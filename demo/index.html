@@ -95,9 +95,11 @@ table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabula
 th, td { padding: 5px 8px; text-align: right; }
 th { font-weight: 500; color: var(--muted); }
 th.rowh { text-align: right; white-space: nowrap; }
-.cm td { font-family: var(--mono); min-width: 44px; border: 1px solid var(--bg); }
-.cm thead th { writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; height: 92px; vertical-align: bottom; }
+.cm td { font-family: var(--mono); min-width: 64px; border: 1px solid var(--bg); text-align: center; }
+.cm thead th { text-align: center; vertical-align: bottom; font-size: 12px; line-height: 1.25; padding: 4px; }
+.cm thead th.axis { color: var(--fg); font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-align: left; }
 .tm td { font-family: var(--mono); min-width: 58px; border: 1px solid var(--bg); text-align: center; }
+.tm .gap { min-width: 14px; width: 14px; padding: 0; border: none; background: none; }
 .metrics td { font-family: var(--mono); }
 .metrics td.best { font-weight: 600; }
 .metrics tr.total td, .metrics tr.total th { border-top: 1px solid var(--line); }
@@ -375,16 +377,16 @@ function drawScatter() {
 }
 function renderHMM() {
   const p = D.hmm_params[L[hmmAct]], k = p.transmat.length, col = C.act[hmmAct];
-  let html = `<thead><tr><th></th>${p.transmat.map((_, j) => `<th style="text-align:center">to S${j + 1}</th>`).join("")}<th style="text-align:center">start</th></tr></thead><tbody>`;
+  let html = `<thead><tr><th></th>${p.transmat.map((_, j) => `<th style="text-align:center">to S${j + 1}</th>`).join("")}<th class="gap"></th><th style="text-align:center" title="Initial state distribution π (not part of the transition matrix)">start prob. π</th></tr></thead><tbody>`;
   p.transmat.forEach((row, i) => {
     html += `<tr><th class="rowh">from S${i + 1}</th>` + row.map(v =>
       `<td style="background:${alpha(col, 0.08 + v * 0.8)};color:${v > 0.55 ? C.surface : C.fg}">${fmt(v, 2)}</td>`).join("") +
-      `<td style="background:${alpha(col, 0.08 + p.startprob[i] * 0.8)};color:${p.startprob[i] > 0.55 ? C.surface : C.fg}">${fmt(p.startprob[i], 2)}</td></tr>`;
+      `<td class="gap"></td><td style="border:1px dashed var(--line);color:var(--fg)">${fmt(p.startprob[i], 2)}</td></tr>`;
   });
   $("transmat").innerHTML = html + "</tbody>";
   const stay = p.transmat.map((r, i) => r[i]);
   const avgStay = stay.reduce((a, b) => a + b, 0) / k;
-  $("hmmCap").textContent = `The diagonal is the chance of staying in the same state for the next window (average ${fmt(avgStay, 2)}). High values mean the state lasts several windows in a row. That persistence over time is what an HMM adds over a per-window classifier.`;
+  $("hmmCap").textContent = `The shaded 3×3 block is the transition matrix A (each row sums to 1). The separate dashed column is the starting distribution π: how likely each state is for the first window of a chunk. The diagonal of A is the chance of staying in the same state for the next window (average ${fmt(avgStay, 2)}). High values mean the state lasts several windows in a row. That persistence over time is what an HMM adds over a per-window classifier.`;
   $("hmmSel").value = hmmAct;
   drawScatter();
 }
@@ -470,7 +472,8 @@ function renderMetrics() {
 }
 function renderCM() {
   const cm = D.metrics[cmModel].confusion;
-  let html = `<thead><tr><th></th>${L.map((_, j) => `<th>${nice(j)}</th>`).join("")}</tr></thead><tbody>`;
+  let html = `<thead><tr><th></th><th class="axis" colspan="${NL}">Predicted →</th></tr>` +
+    `<tr><th class="axis" style="text-align:right">True ↓</th>${L.map((_, j) => `<th>${nice(j)}</th>`).join("")}</tr></thead><tbody>`;
   cm.forEach((row, i) => {
     const tot = row.reduce((a, b) => a + b, 0);
     html += `<tr><th class="rowh">${nice(i)}</th>` + row.map((v, j) => {
